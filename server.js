@@ -34,7 +34,9 @@ console.log(`   PORT                = ${process.env.PORT || 3000}\n`)
 // ─────────────────────────────────────────────
 // CLIENTS
 // ─────────────────────────────────────────────
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || 'mock' })
+// Anthropic client is created lazily inside the webhook handler — only when
+// ANTHROPIC_API_KEY is set. Initializing it at module level with a fake key
+// causes the SDK to throw on startup even in mock mode.
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -403,6 +405,7 @@ app.post('/webhook/instagram/:companyId', async (req, res) => {
         getMockResponse(message, image_url, config))
     } else {
       // ── REAL CLAUDE ────────────────────────────
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
       const claudeResponse = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
