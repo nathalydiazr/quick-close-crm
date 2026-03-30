@@ -1,4 +1,8 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
+// Load .env only for local dev — Railway injects env vars directly.
+// override: false ensures Railway's vars are never overwritten by a stale .env file.
+dotenv.config({ override: false })
+
 import express from 'express'
 import cors from 'cors'
 import { readFileSync, readdirSync, existsSync } from 'fs'
@@ -8,6 +12,24 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ─────────────────────────────────────────────
+// STARTUP ENV CHECK
+// ─────────────────────────────────────────────
+const REQUIRED_VARS = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY']
+const missing = REQUIRED_VARS.filter((v) => !process.env[v])
+if (missing.length) {
+  console.error(`\n❌ Missing required environment variables: ${missing.join(', ')}`)
+  console.error('   Set them in Railway → Service → Variables\n')
+  process.exit(1)
+}
+
+const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'mock'
+console.log(`\n🔑 Environment:`)
+console.log(`   SUPABASE_URL        = ${process.env.SUPABASE_URL}`)
+console.log(`   SUPABASE_SERVICE_KEY= ${process.env.SUPABASE_SERVICE_KEY ? '*** (set)' : '❌ MISSING'}`)
+console.log(`   ANTHROPIC_API_KEY   = ${hasAnthropicKey ? '*** (set)' : '⚠️  not set — mock mode'}`)
+console.log(`   PORT                = ${process.env.PORT || 3000}\n`)
 
 // ─────────────────────────────────────────────
 // CLIENTS
