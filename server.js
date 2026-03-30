@@ -456,6 +456,20 @@ app.get('/api/companies', (req, res) => {
   }
 })
 
+// Meta webhook verification (GET)
+app.get('/webhook/instagram/:companyId', (req, res) => {
+  const mode      = req.query['hub.mode']
+  const token     = req.query['hub.verify_token']
+  const challenge = req.query['hub.challenge']
+
+  if (mode === 'subscribe' && token === process.env.WEBHOOK_SECRET) {
+    console.log(`[webhook] Meta verification passed for company: ${req.params.companyId}`)
+    return res.status(200).send(challenge)
+  }
+
+  return res.status(403).json({ error: 'Verification failed — token mismatch' })
+})
+
 // Health check
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
