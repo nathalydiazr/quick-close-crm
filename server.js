@@ -4,7 +4,7 @@ import cors from 'cors'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // ─────────────────────────────────────────────
 // CLIENTS
 // ─────────────────────────────────────────────
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'mock')
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || 'mock' })
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -168,12 +168,12 @@ Never respond in plain text — only through the tool.`
 }
 
 // ─────────────────────────────────────────────
-// GEMINI TOOL DEFINITION
+// ANTHROPIC TOOL DEFINITION
 // ─────────────────────────────────────────────
 const SALES_RESPONSE_TOOL = {
   name: 'sales_response',
   description: 'Send a sales message to the Instagram customer and record the lead assessment.',
-  parameters: {
+  input_schema: {
     type: 'object',
     properties: {
       message: {
@@ -370,39 +370,31 @@ app.post('/webhook/instagram/:companyId', async (req, res) => {
       content: msg.content,
     }))
 
-    // 5. Get AI response — real Gemini or mock
-    const useMock = !process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'mock'
+    // 5. Get AI response — real Claude or mock
+    const useMock = !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'mock'
     let aiMessage, temperature, close_reason, status, voucher_detected
 
     if (useMock) {
       // ── MOCK MODE ──────────────────────────────
-      console.log(`[${companyId}] ⚠️  MOCK MODE (GEMINI_API_KEY not set)`)
+      console.log(`[${companyId}] ⚠️  MOCK MODE (ANTHROPIC_API_KEY not set)`)
       ;({ message: aiMessage, temperature, close_reason, status, voucher_detected } =
         getMockResponse(message, image_url, config))
     } else {
-      // ── REAL GEMINI ────────────────────────────
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
-        systemInstruction: buildSystemPrompt(config),
-        tools: [{ functionDeclarations: [SALES_RESPONSE_TOOL] }],
-        toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['sales_response'] } },
+      // ── REAL CLAUDE ────────────────────────────
+      const claudeResponse = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: buildSystemPrompt(config),
+        tools: [SALES_RESPONSE_TOOL],
+        tool_choice: { type: 'tool', name: 'sales_response' },
+        messages: claudeMessages,
       })
 
-      // All messages except the last become chat history; the last is sent fresh
-      const history = claudeMessages.slice(0, -1).map((m) => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
-      }))
-      const lastMessage = claudeMessages[claudeMessages.length - 1].content
-
-      const chat = model.startChat({ history })
-      const result = await chat.sendMessage(lastMessage)
-      const fn = result.response.functionCalls()?.[0]
-
-      if (!fn) {
-        throw new Error('Gemini did not invoke the sales_response function')
+      const toolUseBlock = claudeResponse.content.find((b) => b.type === 'tool_use')
+      if (!toolUseBlock) {
+        throw new Error('Claude did not invoke the sales_response tool')
       }
-      ;({ message: aiMessage, temperature, close_reason, status, voucher_detected } = fn.args)
+      ;({ message: aiMessage, temperature, close_reason, status, voucher_detected } = toolUseBlock.input)
     }
 
     // 6. Save the AI response
@@ -486,10 +478,10 @@ app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().to
 // ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  const mockMode = !process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'mock'
+  const mockMode = !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'mock'
   console.log(`\n🤖 Instagram Sales Agent`)
   console.log(`   Webhook: POST http://localhost:${PORT}/webhook/instagram/:companyId`)
   console.log(`   API:     GET  http://localhost:${PORT}/api/companies`)
-  console.log(`   Mode:    ${mockMode ? '⚠️  MOCK (GEMINI_API_KEY not set)' : '✅  Gemini gemini-2.0-flash'}`)
+  console.log(`   Mode:    ${mockMode ? '⚠️  MOCK (ANTHROPIC_API_KEY not set)' : '✅  Claude claude-haiku-4-5-20251001'}`)
   console.log(`   Ready.\n`)
 })
