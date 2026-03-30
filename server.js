@@ -20,8 +20,8 @@ const REQUIRED_VARS = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY']
 const missing = REQUIRED_VARS.filter((v) => !process.env[v])
 if (missing.length) {
   console.error(`\n❌ Missing required environment variables: ${missing.join(', ')}`)
-  console.error('   Set them in Railway → Service → Variables\n')
-  process.exit(1)
+  console.error('   Set them in Railway → your service → Variables tab')
+  console.error('   The server will start but all webhook requests will fail.\n')
 }
 
 const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'mock'
