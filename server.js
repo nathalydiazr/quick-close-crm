@@ -495,14 +495,16 @@ app.get('/webhook/instagram/:companyId', (req, res) => {
   return res.status(403).json({ error: 'Verification failed — token mismatch' })
 })
 
-// Health check
-app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
+// Health check — Railway probes this to decide if the service is alive.
+// Respond with explicit 200 so Railway never sends SIGTERM on a probe failure.
+app.get('/health', (_, res) => res.status(200).json({ status: 'ok' }))
+app.get('/',       (_, res) => res.status(200).json({ status: 'ok' }))
 
 // ─────────────────────────────────────────────
-// START
+// START — must bind to 0.0.0.0 on Railway's dynamic PORT
 // ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   const mockMode = !process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'mock'
   console.log(`\n🤖 Instagram Sales Agent`)
   console.log(`   Webhook: POST http://localhost:${PORT}/webhook/instagram/:companyId`)
